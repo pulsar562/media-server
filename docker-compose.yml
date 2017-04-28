@@ -1,0 +1,173 @@
+version: '3'
+
+services:
+  nzbget:
+    image: linuxserver/nzbget
+    container_name: nzbget
+    restart: unless-stopped
+    ports:
+      - "6789:6789"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ:Europe/London
+    volumes:
+      - /var/filez/containers/nzbget/config:/config
+      - /var/filez/dl:/downloads
+
+  sonarr:
+    image: linuxserver/sonarr
+    container_name: sonarr
+    restart: unless-stopped
+    depends_on:
+      - nzbget
+      - plex
+    links:
+      - nzbget
+      - plex
+    ports:
+      - "8989:8989"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ:Europe/London
+    volumes:
+      - /dev/rtc:/dev/rtc:ro
+      - /var/filez/containers/sonarr/config:/config
+      - /var/filez/tv:/tv
+      - /var/filez/dl/completed/tv:/downloads/completed/tv
+
+  plex:
+    image: linuxserver/plex
+    restart: unless-stopped
+    container_name: plex
+    network_mode: host
+#    ports:
+#      - 32400:32400/tcp
+#      - 3005:3005/tcp
+#      - 8324:8324/tcp
+#      - 32469:32469/tcp
+#      - 1900:1900/udp
+#      - 32410:32410/udp
+#      - 32412:32412/udp
+#      - 32413:32413/udp
+#      - 32414:32414/udp
+    environment:
+      - VERSION=latest
+      - PUID=1000
+      - PGID=1000
+      - TZ:Europe/London
+    volumes:
+      - /var/filez/containers/plex/config:/config
+      - /var/filez/tv:/data/tvshows
+      - /var/filez/movies:/data/movies
+      - /var/filez/documentaries:/data/documentaries
+
+  couchpotato:
+    image: linuxserver/couchpotato
+    container_name: couchpotato
+    restart: unless-stopped
+    depends_on:
+      - nzbget
+      - plex
+    links:
+      - plex
+      - nzbget
+    ports:
+      - 5050:5050
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ:Europe/London
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/filez/containers/couchpotato/config:/config
+      - /var/filez/dl/completed/movies:/downloads/movies
+      - /var/filez/movies:/movies
+
+  plexrequests:
+    image: linuxserver/plexrequests
+    container_name: plexrequests
+    restart: unless-stopped
+    depends_on:
+      - plex
+      - sonarr
+      - couchpotato
+    links:
+      - plex
+      - sonarr
+      - couchpotato
+    ports:
+      - 3000:3000
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ:Europe/London
+    volumes:
+      - /dev/rtc:/dev/rtc:ro
+      - /var/filez/containers/plexrequests/config:/config
+
+  letsencrypt:
+    image: linuxserver/letsencrypt
+    container_name: letsencrypt
+    restart: unless-stopped
+    depends_on:
+      - sonarr
+      - couchpotato
+      - nzbget
+      - plexrequests
+    ports:
+      - 443:443
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ:Europe/London
+      - EMAIL=CHANGEME
+      - URL=CHANGEME
+      - SUBDOMAINS=CHANGEME
+    volumes:
+      - /var/filez/containers/letsencrypt/config:/config
+
+  htpcmanager:
+    image: linuxserver/htpcmanager
+    container_name: htpcmanager
+    restart: unless-stopped
+    depends_on:
+      - sonarr
+      - couchpotato
+      - nzbget
+      - plexrequests
+    ports:
+      - 8085:8085
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ:Europe/London
+    volumes:
+      - /var/filez/containers/htpcmanager/config:/config
+
+  hydra:
+    image: linuxserver/hydra
+    container_name: hydra
+    restart: unless-stopped
+    depends_on:
+      - nzbget
+    links:
+      - nzbget
+    ports:
+      - 5075:5075
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ:Europe/London
+    volumes:
+      - /var/filez/containers/hydra/config:/config
+
+  watchtower:
+    image: v2tec/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    command: --cleanup
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
